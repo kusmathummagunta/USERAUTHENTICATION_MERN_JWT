@@ -21,6 +21,7 @@ const cors = require("cors");
 
 const mongoose = require("mongoose");
 const User = require("./models/user");
+const jwt = require("jsonwebtoken");
 
 app.use(cors());
 //req.body wouldn't work if we don't use this. we get undefined
@@ -52,12 +53,53 @@ app.post("/api/login", async (req, res) => {
     email: req.body.email,
     password: req.body.password,
   });
+  //JWT allows us to create a special token which allows us determine that the user is legit
   if (user) {
-    console.log("success");
-    return res.json({ status: "success", user: true });
+    // we create the jwt token that we can send the user the token, 2 attributes are payload we need to sign and the secret key.
+    const token = jwt.sign(
+      {
+        name: user.name,
+        email: user.email,
+      },
+      "verysecurekey1570"
+    );
+
+    return res.json({
+      status: "ok",
+      user: { name: user.name, email: user.email },
+      token: token,
+    });
   } else {
-    console.log("error");
     return res.json({ status: "error", user: false });
+  }
+});
+app.get("/api/dashboard", async (req, res) => {
+  const token = req.headers["x-access-token"];
+
+  try {
+    const decoded = jwt.verify(token, "verysecurekey1570");
+    const email = decoded.email;
+    const user = await User.findOne({ email: email });
+
+    return res.json({ status: "ok", quote: user.quote });
+  } catch (error) {
+    console.log(error);
+    return res.json({ status: "error", error: "invalid token" });
+  }
+});
+
+app.post("/api/dashboard", async (req, res) => {
+  const token = req.headers["x-access-token"];
+
+  try {
+    const decoded = jwt.verify(token, "verysecurekey1570");
+    const email = decoded.email;
+    await User.updateOne({ email: email }, { $set: { quote: req.body.quote } });
+
+    return res.json({ status: "ok" });
+  } catch (error) {
+    console.log(error);
+    return res.json({ status: "error", error: "invalid token" });
   }
 });
 //we need to start a server because nodemon runs the node file and exits cox there is no long running process
